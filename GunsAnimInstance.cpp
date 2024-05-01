@@ -38,6 +38,8 @@ void UGunsAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		{
 			LastMovementOffsetYaw = MovementOffsetYaw;
 		}
+
+		bAiming = GunsCharacter->GetAiming();
 		
 		//FString RotationMessage = FString::Printf(TEXT("Base Aim Rotation: %f"), AimRotation.Yaw);
 		//FString MovementRotationMessage = FString::Printf(TEXT("Movement Rotation: %f"), MovementRotation.Yaw);  THESE FOUR WILL DEBUG YOUR YAW REFERENCES

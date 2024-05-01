@@ -10,9 +10,27 @@
 
 // Sets default values
 AGunsCharacter::AGunsCharacter() :
+	// Base Case rates for turning/looking up
 	BaseTurnRate(45.f),
 	BaseLookUpRate(45.f),
-	bAiming(false)
+	//Turn rates for aiming/not aiming
+	HipTurnRate(90.f),
+	HipLookUpRate(90.f),
+	AimingTurnRate(20.f),
+	AimingLookUpRate(20.f),
+	//Mouse look Sensitivity scale facters
+	MouseHipTurnRate(1.f),
+	MouseHipLookUpRate(1.f),
+	MouseAimingTurnRate(0.2f),
+	MouseAimingLookUpRate(0.2f),
+	//True when aiming the weapon
+	bAiming(false),
+	//Camera field of view values
+	CameraDefaultFOV(0.f), //set in BeginPlay
+	CameraZoomedFOV(30.f),
+	CameraCurrentFOV(0.f),
+	ZoomInterpSpeed(20.5)
+
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -20,9 +38,9 @@ AGunsCharacter::AGunsCharacter() :
 	// Create a camera boom (pulls in toward the character if there is a collision
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 300.f; // The camera follows at this distance behind the character
+	CameraBoom->TargetArmLength = 180.f; // The camera follows at this distance behind the character
 	CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
-	CameraBoom->TargetOffset= FVector(0.f, 50.f, 50.f);
+	CameraBoom->TargetOffset= FVector(0.f, 50.f, 70.f);
 
 	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -48,6 +66,12 @@ AGunsCharacter::AGunsCharacter() :
 void AGunsCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (FollowCamera)
+	{
+		CameraDefaultFOV = GetFollowCamera()->FieldOfView;
+		CameraDefaultFOV = CameraDefaultFOV;
+	}
 	
 
 
@@ -89,6 +113,35 @@ void AGunsCharacter::LookUpAtRate(float Rate)
 {
 	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds()); // deg/sec * sec/frame 
 }
+
+void AGunsCharacter::Turn(float Value)
+{
+	float TurnScaleFactor{};
+	if (bAiming)
+	{
+		TurnScaleFactor = MouseAimingTurnRate;
+	}
+	else
+	{
+		TurnScaleFactor = MouseHipTurnRate;
+	}
+	AddControllerYawInput(Value * TurnScaleFactor);
+}
+
+void AGunsCharacter::LookUp(float Value)
+{
+	float LookUpScaleFactor{};
+	if (bAiming)
+	{
+		LookUpScaleFactor = MouseAimingLookUpRate;
+	}
+	else
+	{
+		LookUpScaleFactor = MouseHipLookUpRate;
+	}
+	AddControllerPitchInput(Value * LookUpScaleFactor);
+}
+
 
 void AGunsCharacter::FireWeapon() 
 {
@@ -191,11 +244,46 @@ bool AGunsCharacter::GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVe
 void AGunsCharacter::AimingButtonPressed()
 {
 	bAiming = true;
+	//GetFollowCamera()->SetFieldOfView(CameraZoomedFOV);
 }
 
 void AGunsCharacter::AimingButtonReleased()
 {
 	bAiming = false;
+	//GetFollowCamera()->SetFieldOfView(CameraDefaultFOV);
+}
+
+void AGunsCharacter::CameraInterpZoom(float DeltaTime)
+{
+	//Set current camera field of view
+	if (bAiming)
+	{
+		//Interpolat to zoomed FOV
+		CameraCurrentFOV = FMath::FInterpTo(CameraCurrentFOV, CameraZoomedFOV, DeltaTime, ZoomInterpSpeed);
+		//GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+	}
+	else
+	{
+		//Interpolate to default FOV
+		CameraCurrentFOV = FMath::FInterpTo(CameraCurrentFOV, CameraDefaultFOV, DeltaTime, ZoomInterpSpeed);
+		//GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+
+	}
+	GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+}
+
+void AGunsCharacter::SetZoomLookRates()
+{
+	if (bAiming)
+	{
+		BaseTurnRate = AimingTurnRate;
+		BaseTurnRate = AimingLookUpRate;
+	}
+	else
+	{
+		BaseTurnRate = HipTurnRate;
+		BaseLookUpRate = HipLookUpRate;
+	}
 }
 
 // Called every frame
@@ -203,6 +291,33 @@ void AGunsCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	//Handle Interpolation for the Zoom when aiming
+	CameraInterpZoom(DeltaTime);
+
+	//Change lood secnsitivity based on aiming
+	SetZoomLookRates();
+
+
+
+		/*
+		**********THIS IS THE UNFACTORED CODE PRIOR PUTTING IT IN THE PRIOR PUTTING IT IN THE AGunsCharacter::CameraInterpZoom(DeltaTime) FUNCTION*************
+		//Set current camera field of view
+		if (bAiming)
+		{
+			//Interpolat to zoomed FOV
+			CameraCurrentFOV = FMath::FInterpTo(CameraCurrentFOV, CameraZoomedFOV, DeltaTime, ZoomInterpSpeed);
+			//GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+		}
+		else
+		{
+			//Interpolate to default FOV
+			CameraCurrentFOV = FMath::FInterpTo(CameraCurrentFOV, CameraDefaultFOV, DeltaTime, ZoomInterpSpeed);
+			//GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+
+		}
+		GetFollowCamera()->SetFieldOfView(CameraCurrentFOV);
+		********************************************************************************************************************************************************
+		*/
 }
 
 // Called to bind functionality to input
@@ -215,15 +330,18 @@ void AGunsCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	PlayerInputComponent->BindAxis("MoveRight", this, &AGunsCharacter::MoveRight);
 	PlayerInputComponent->BindAxis("TurnRate", this, &AGunsCharacter::TurnAtRate);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &AGunsCharacter::LookUpAtRate);
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);	// Mouse X
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput); // Mouse Y
+	PlayerInputComponent->BindAxis("Turn", this, &AGunsCharacter::Turn);	// Mouse X
+	PlayerInputComponent->BindAxis("LookUp", this, &AGunsCharacter::LookUp); // Mouse Y
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
-	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &AGunsCharacter::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Released, this, &AGunsCharacter::StopJumping);
 
 	PlayerInputComponent->BindAction("FireButton", IE_Pressed, this, &AGunsCharacter::FireWeapon);
 
-	PlayerInputComponent->BindAction("AimingButton"), IE_Pressed, this &AGunsCharacter::
+	PlayerInputComponent->BindAction("AimingButton", IE_Pressed, this, &AGunsCharacter::AimingButtonPressed);
+	PlayerInputComponent->BindAction("AimingButton", IE_Released, this, &AGunsCharacter::AimingButtonReleased);
+
+
 
 
 
